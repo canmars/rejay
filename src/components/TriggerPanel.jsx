@@ -189,8 +189,11 @@ export default function TriggerPanel({ cues, activeCueIds, onFireCue }) {
 
       {/* Header */}
       <div className="flex flex-col items-center justify-center p-6 border-b border-border shrink-0 bg-surface-1">
-        <h2 className="text-xs tracking-[0.4em] font-black text-text uppercase">REJİ KONTROL PANELİ</h2>
-        <p className="text-[9px] text-text-muted mt-2 tracking-widest font-medium">Erken Uyarı Sistemi Devrede</p>
+        <h2 className="text-sm tracking-[0.3em] font-black text-text uppercase">REJİ KONTROL PANELİ</h2>
+        <div className="mt-2 flex items-center gap-3">
+          <div className="w-1.5 h-1.5 rounded-full bg-red animate-pulse"></div>
+          <p className="text-[10px] text-text-muted tracking-[0.15em] font-black uppercase">Erken Uyarı Sistemi Devrede</p>
+        </div>
       </div>
 
       {/* Active Cues Area */}

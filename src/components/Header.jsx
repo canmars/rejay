@@ -20,14 +20,17 @@ export default function Header({ mode, onModeChange, onExport, onImport }) {
   };
   return (
     <header className="flex items-center justify-between px-8 h-20 bg-surface-1 border-b-2 border-border shrink-0 shadow-md z-50">
-      {/* Left – Logo highly stylized */}
+      {/* Left – Logo and Tagline integrated */}
       <div className="flex flex-col">
-        <h1 className="text-4xl font-black tracking-[0.1em] text-text leading-none">
+        <h1 className="text-3xl font-black tracking-tight text-text leading-tight uppercase cursor-default">
           REJAY
         </h1>
-        <span className="text-[9px] tracking-[0.2em] font-medium text-text-muted mt-1 uppercase">
-          Tiyatro Reji ve Prompter Asistanı
-        </span>
+        <div className="flex items-center gap-2 mt-0.5">
+          <div className="h-[2px] w-4 bg-text-muted/30"></div>
+          <span className="text-[10px] tracking-widest font-black text-text-muted uppercase">
+            Tiyatro Reji ve Prompter Asistanı
+          </span>
+        </div>
       </div>
 
       {/* Center/Right – Massive Mode Toggle */}

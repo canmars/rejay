@@ -1,7 +1,0 @@
-güzel harika oldu. REJİ KONTROL Panelİ
-Erken Uyarı Sistemi Devrede
-
- || şu kısmın da fontunu :. Senaryo Yükle
-PDF formatındaki senaryo dosyanızı yükleyin. Parantezli sahne yönergeleri otomatik olarak ayıklanacaktır.
-
- kısmında kullandığımız fonta çevirelim. hatta tüm fontları bu font yahut benzeri yapalım  başlıklarda daha kalın dahi kullanılabilir. REJAY'ın üzerindeki hover'ı ve renklendirmeleri kaldıralım. Tiyatro Reji ve Prompter Asistanı | kısmını da daha uygun yerleştirelim. 
