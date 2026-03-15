@@ -100,12 +100,19 @@ function parseScript(lines) {
       const restText = charMatch[2].trim();
       if (isAllCaps(potentialName) && potentialName.length >= 2 && restText.length > 0) {
         parsed.push({ type: 'character', text: potentialName.replace(/[:\-–—]+$/, '').trim() });
-        parsed.push(parseDialogueLine(restText));
+        const parsedDialogue = parseDialogueLine(restText);
+        parsedDialogue.lineId = `line-${i}`; 
+        parsed.push(parsedDialogue);
+      } else {
+        const parsedDialogue = parseDialogueLine(trimmed);
+        parsedDialogue.lineId = `line-${i}`;
+        parsed.push(parsedDialogue);
       }
+    } else {
+      const parsedDialogue = parseDialogueLine(trimmed);
+      parsedDialogue.lineId = `line-${i}`; 
+      parsed.push(parsedDialogue);
     }
-    const parsedDialogue = parseDialogueLine(trimmed);
-    parsedDialogue.lineId = `line-${i}`; // Assign unique line ID based on index
-    parsed.push(parsedDialogue);
   }
   return parsed;
 }
@@ -165,7 +172,7 @@ function DirectionSpan({ text, dirId, mode, cues, activeCueIds, onDirectionClick
 }
 
 // ── Dialogue line (clickable in setup mode to add cue to arbitrary line) ──
-function DialogueLine({ line, mode, cues, activeCueIds, onDirectionClick, baseFontSize }) {
+function DialogueLine({ line, mode, cues, activeCueIds, onDirectionClick, baseFontSize, navId }) {
   const isSetup = mode === 'setup';
   const isLive = mode === 'live';
   const lineCues = cues.filter((c) => c.directionId === line.lineId);
@@ -180,6 +187,7 @@ function DialogueLine({ line, mode, cues, activeCueIds, onDirectionClick, baseFo
         ${isActive ? 'bg-gradient-to-r from-cyan/10 to-transparent border-l-4 border-cyan shadow-[inset_4px_0_20px_rgba(20,184,166,0.1)]' : 'border-l-4 border-transparent'}
         ${hasCue && isLive && allFired && !isActive ? 'opacity-40' : ''}`}
       id={`dir-${line.lineId}`}
+      data-nav-id={navId}
       data-cue-id={hasCue ? line.lineId : undefined}
     >
       <div className="flex items-center flex-wrap">
@@ -229,25 +237,47 @@ function DialogueLine({ line, mode, cues, activeCueIds, onDirectionClick, baseFo
 // Component
 // ─────────────────────────────────────────
 
-export default function ScriptPanel({ 
-  mode, 
-  cues, 
-  activeCueIds, 
-  onDirectionClick, 
-  onActivateCue, 
-  onDeactivateCue, 
-  baseFontSize = 34, 
+export default function ScriptPanel({
+  mode,
+  cues,
+  activeCueIds,
+  onDirectionClick,
+  onActivateCue,
+  onDeactivateCue,
+  baseFontSize = 34,
   onFontSizeChange,
   scriptLines = [],
   setScriptLines,
   fileName = '',
-  setFileName
+  setFileName,
+  onAutoProjectName,
+  scrollToTarget,
+  onScrollComplete
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
   const scrollRef = useRef(null);
 
   const safeBaseFontSize = baseFontSize || 34;
+
+  // ── Scroll to Target ──
+  useEffect(() => {
+    if (scrollToTarget && scrollToTarget.id) {
+      const element = scrollRef.current?.querySelector(`[data-nav-id="${scrollToTarget.id}"]`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Brief highlight effect
+        element.classList.add('nav-highlight');
+        setTimeout(() => {
+          element.classList.remove('nav-highlight');
+          onScrollComplete?.();
+        }, 2000);
+      } else {
+        onScrollComplete?.();
+      }
+    }
+  }, [scrollToTarget, onScrollComplete]);
 
   // IntersectionObserver to activate cues in LIVE mode when they enter the "Active Zone"
   useEffect(() => {
@@ -291,13 +321,15 @@ export default function ScriptPanel({
       const lines = await extractTextWithLines(pdf);
       const parsed = parseScript(lines);
       setScriptLines(parsed);
+      if (onAutoProjectName) {
+        onAutoProjectName(file.name.replace('.pdf', ''));
+      }
     } catch (err) {
-      console.error('PDF parse error:', err);
       setScriptLines([{ type: 'dialogue', text: 'PDF okunamadı. Lütfen geçerli bir dosya seçin.' }]);
     } finally {
       setIsLoading(false);
     }
-  }, [setFileName, setScriptLines]);
+  }, [setFileName, setScriptLines, onAutoProjectName]);
 
   // ── Empty state ──
   if (scriptLines.length === 0 && !isLoading) {
@@ -422,23 +454,27 @@ export default function ScriptPanel({
             );
           }
 
-          if (line.type === 'direction') {
-            const hasCue = cues.find((c) => c.directionId === line.dirId);
-            return (
-              <div key={index} className={`my-5 pl-5 border-l-2 ${hasCue ? 'border-cyan/50' : 'border-amber/40'}`}>
-                <p className="text-xl leading-[2]">
-                  <DirectionSpan
-                    text={line.text}
-                    dirId={line.dirId}
-                    mode={mode}
-                    cues={cues}
-                    activeCueIds={activeCueIds}
-                    onDirectionClick={onDirectionClick}
-                    baseFontSize={safeBaseFontSize}
-                  />
-                </p>
-              </div>
-            );
+            if (line.type === 'direction') {
+              const hasCue = cues.find((c) => c.directionId === line.dirId);
+              return (
+                <div 
+                  key={index} 
+                  data-nav-id={line.dirId}
+                  className={`my-5 pl-5 border-l-2 transition-all duration-500 ${hasCue ? 'border-cyan/50' : 'border-amber/40'}`}
+                >
+                  <p className="text-xl leading-[2]">
+                    <DirectionSpan
+                      text={line.text}
+                      dirId={line.dirId}
+                      mode={mode}
+                      cues={cues}
+                      activeCueIds={activeCueIds}
+                      onDirectionClick={onDirectionClick}
+                      baseFontSize={safeBaseFontSize}
+                    />
+                  </p>
+                </div>
+              );
             }
 
             if (line.type === 'mixed' || line.type === 'dialogue') {
@@ -446,6 +482,7 @@ export default function ScriptPanel({
                 <DialogueLine
                   key={index}
                   line={line}
+                  navId={line.lineId}
                   mode={mode}
                   cues={cues}
                   activeCueIds={activeCueIds}

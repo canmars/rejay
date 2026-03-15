@@ -24,6 +24,32 @@ export default function App() {
     const saved = localStorage.getItem('rejay-font-size');
     return saved ? Number(saved) : 34;
   });
+  const [projectName, setProjectName] = useState(() => localStorage.getItem('rejay-project-name') || 'adsiz-proje');
+
+  const slugify = (text) => {
+    return text.toString().toLowerCase()
+      .replace(/\s+/g, '-')           // Replace spaces with -
+      .replace(/[^\w\-]+/g, '')       // Remove all non-word chars
+      .replace(/\-\-+/g, '-')         // Replace multiple - with single -
+      .replace(/^-+/, '')             // Trim - from start of text
+      .replace(/-+$/, '');            // Trim - from end of text
+  };
+
+  // ── Toast Notifications state ──
+  const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' | 'info' }
+
+  // ── Scroll to Target Line functionality ──
+  const [scrollToTarget, setScrollToTarget] = useState(null); // { id, timestamp } to trigger navigation
+
+  const handleScrollToLine = (id) => {
+    setScrollToTarget({ id, timestamp: Date.now() });
+  };
+
+  // ── Show Toast helper ──
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // ── Cue Editor & Live Active Zone state ──
   const [editingDirection, setEditingDirection] = useState(null); // { dirId, text }
@@ -45,6 +71,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rejay-font-size', scriptFontSize.toString());
   }, [scriptFontSize]);
+
+  useEffect(() => {
+    localStorage.setItem('rejay-project-name', projectName);
+  }, [projectName]);
 
   // ── Audio Hydration (Blobs die on refresh) ──
   useEffect(() => {
@@ -94,28 +124,48 @@ export default function App() {
     const projectData = {
       version: '1.0',
       timestamp: new Date().toISOString(),
+      projectName,
       fileName,
       scriptFontSize,
       scriptLines,
-      cues: cues.map(c => ({ ...c, soundUrl: '' })) // Don't export temporary URLs
+      cues: cues.map(c => ({ ...c, soundUrl: '' }))
     };
+
+    const dateStr = new Date().toISOString().split('T')[0].split('-').reverse().join('-');
+    const downloadName = `${projectName}_${dateStr}.rejay`;
 
     const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${fileName.replace('.pdf', '') || 'rejay-proje'}.rejay`;
+    link.download = downloadName;
     link.click();
     URL.revokeObjectURL(url);
+    showToast('Proje dosyası indirildi. ✨', 'info');
   };
 
   const handleImport = (data) => {
+    if (data.projectName) setProjectName(data.projectName);
     if (data.fileName) setFileName(data.fileName);
     if (data.scriptFontSize) setScriptFontSize(data.scriptFontSize);
     if (data.scriptLines) setScriptLines(data.scriptLines);
     if (data.cues) setCues(data.cues);
-    setMode('setup'); // Switch to setup after import to review
-    alert('Proje başarıyla yüklendi!');
+    setMode('setup');
+    showToast('Proje başarıyla yüklendi! 🎭');
+  };
+
+  const handleResetProject = async () => {
+    if (window.confirm('TÜM PROJE SIFIRLANACAK! Emin misiniz?\n(Tüm tetikleyiciler, senaryo ve ekli ses dosyaları silinecek)')) {
+      // Clear persistence
+      localStorage.clear();
+      // Clearing IndexedDB is more complex, but we can at least clear the cues and script
+      setCues([]);
+      setScriptLines([]);
+      setFileName('');
+      setProjectName('adsiz-proje');
+      setMode('setup');
+      showToast('Her şey sıfırlandı. Yeni bir sayfadasınız.', 'info');
+    }
   };
 
   // Called when a direction (parenthetical or line) is clicked in setup mode
@@ -198,22 +248,33 @@ export default function App() {
 
   return (
     <div className={`h-screen flex flex-col bg-bg overflow-hidden transition-all duration-500
-      ${mode === 'setup' ? 'border-[3px] border-cyan/40 shadow-[inset_0_0_100px_rgba(0,212,170,0.05)]' : ''}`}>
+      ${mode === 'setup' ? 'border-[4px] border-cyan/40 shadow-[inset_0_0_100px_rgba(0,212,170,0.05)]' : ''}`}>
       
-      {/* Setup Mode Banner */}
-      {mode === 'setup' && (
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-cyan/20 border-b border-l border-r border-cyan/40 px-6 py-1 rounded-b-lg text-[10px] text-cyan font-bold tracking-[0.2em] z-50 animate-pulse">
-          KURULUM MODU AKTİF
-        </div>
-      )}
-
       {/* Top Nav */}
       <Header 
         mode={mode} 
         onModeChange={setMode} 
         onExport={handleExport} 
         onImport={handleImport} 
+        onReset={handleResetProject}
+        projectName={projectName}
+        onProjectNameChange={setProjectName}
       />
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-24 right-8 z-[100] animate-[slideInRight_0.3s_ease-out]">
+          <div className={`px-6 py-3 rounded-xl border shadow-2xl backdrop-blur-md flex items-center gap-3
+            ${toast.type === 'error' ? 'bg-red/20 border-red text-red' : 
+              toast.type === 'info' ? 'bg-blue/20 border-blue text-blue' : 
+              'bg-cyan/20 border-cyan text-cyan'}`}>
+            <span className="text-xl">
+              {toast.type === 'error' ? '⚠️' : toast.type === 'info' ? 'ℹ️' : '✅'}
+            </span>
+            <span className="text-sm font-black tracking-widest uppercase">{toast.message}</span>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
@@ -232,6 +293,13 @@ export default function App() {
             setScriptLines={setScriptLines}
             fileName={fileName}
             setFileName={setFileName}
+            onAutoProjectName={(name) => {
+              if (projectName === 'adsiz-proje' || !projectName) {
+                setProjectName(slugify(name));
+              }
+            }}
+            scrollToTarget={scrollToTarget}
+            onScrollComplete={() => setScrollToTarget(null)}
           />
         </div>
 
@@ -247,14 +315,16 @@ export default function App() {
             />
           ) : (
             <TriggerPanel 
+              mode={mode}
+              scriptLines={scriptLines}
               systemStatus={systemStatus} 
               onStatusChange={setStatusChange => setSystemStatus(setStatusChange)} 
               cues={cues}
               activeCueIds={activeCueIds}
               onFireCue={handleFireCue}
-              onResetCue={handleResetCue}
               onRemoveCue={handleRemoveCue}
-              onAddManualCue={handleAddManualCue}
+              onEditCue={handleDirectionClick}
+              onScrollToLine={handleScrollToLine}
             />
           )}
         </div>
