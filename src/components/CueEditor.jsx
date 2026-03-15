@@ -189,7 +189,7 @@ export default function CueEditor({ directionText, directionId, existingCue, onS
     <div className="flex flex-col h-full bg-bg">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-        <span className="text-[11px] tracking-[0.2em] text-cyan font-medium">TETİKLEYİCİ SİHİRBAZI</span>
+        <span className="text-[11px] tracking-[0.2em] text-cyan font-medium uppercase">Tetikleyici Yapılandırması</span>
         <button
           onClick={onCancel}
           className="text-[11px] tracking-wider text-text-muted hover:text-red transition-colors cursor-pointer"
@@ -276,7 +276,7 @@ export default function CueEditor({ directionText, directionId, existingCue, onS
                 <input
                   type="text"
                   readOnly
-                  placeholder="Henüz dosya seçilmedi..."
+                  placeholder="Ses dosyası seçilmedi"
                   value={form.soundFile}
                   className="flex-1 px-3 py-2.5 rounded-lg bg-surface-2 border border-border text-sm text-text font-mono
                              placeholder:text-text-muted focus:outline-none cursor-default"
@@ -286,7 +286,7 @@ export default function CueEditor({ directionText, directionId, existingCue, onS
                   className="px-4 py-2.5 rounded-lg bg-surface-2 border border-border text-[10px] font-bold tracking-wider 
                              text-text-muted hover:text-cyan hover:border-cyan/50 hover:bg-cyan/10 transition-colors cursor-pointer"
                 >
-                  GÖZ AT
+                  DOSYA SEÇ
                 </button>
                 <input 
                   type="file" 
@@ -416,7 +416,7 @@ export default function CueEditor({ directionText, directionId, existingCue, onS
                 Reji Notu
               </label>
               <textarea
-                placeholder="Sahne yönetmeni için notlar..."
+                placeholder="Sahne ekibi için notlar..."
                 value={form.actionNote}
                 onChange={(e) => updateField('actionNote', e.target.value)}
                 rows={4}

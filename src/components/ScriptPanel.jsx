@@ -204,10 +204,10 @@ function DialogueLineBase({ line, mode, cues, activeCueIds, onDirectionClick, ba
 
   return (
     <div 
-      className={"relative group mb-8 p-4 -mx-4 rounded-2xl transition-all duration-500 " +
-        (isSetup ? 'hover:bg-surface-2/40 border border-transparent hover:border-border/30 ' : '') +
-        (isActive ? 'bg-gradient-to-r from-cyan/10 to-transparent border-l-4 border-cyan shadow-[inset_4px_0_20px_rgba(20,184,166,0.1)] ' : 'border-l-4 border-transparent ') +
-        (hasCue && isLive && allFired && !isActive ? 'opacity-40' : '')}
+      className={"relative group mb-1 p-2 -mx-2 rounded-lg transition-all duration-500 " +
+        (isSetup ? 'hover:bg-cyan/5 border border-transparent hover:border-cyan/10 ' : '') +
+        (isActive ? 'bg-cyan/5 border-l-4 border-cyan ' : 'border-l-4 border-transparent ') +
+        (hasCue && isLive && allFired && !isActive ? 'opacity-30' : '')}
       id={`dir-${line.lineId}`}
       data-nav-id={navId}
       data-cue-id={hasCue ? line.lineId : undefined}
@@ -260,7 +260,8 @@ const DialogueLine = memo(DialogueLineBase);
 
 
 // ── ScriptRow component for virtualization v2 ──
-function ScriptRowBase({ index, style, scriptLines, cues, mode, activeCueIds, onDirectionClick, safeBaseFontSize }) {
+function ScriptRowBase({ index, style, ...rowProps }) {
+  const { scriptLines, cues, mode, activeCueIds, onDirectionClick, safeBaseFontSize } = rowProps;
   if (index === scriptLines.length) {
     return (
       <div style={style} className="flex flex-col items-center justify-start pt-20 px-[5%]">
@@ -274,26 +275,26 @@ function ScriptRowBase({ index, style, scriptLines, cues, mode, activeCueIds, on
   if (!line) return null;
 
   const content = (
-    <div className="mx-auto w-full max-w-[1000px]">
-      {line.type === 'spacer' && <div className="h-10" />}
+    <div className="w-full">
+      {line.type === 'spacer' && <div className="h-4" />}
       
       {line.type === 'character' && (
-        <div className="flex flex-col justify-end pb-5">
-          <span className="text-[14px] tracking-[0.35em] font-black text-cyan uppercase block mb-1.5">{line.text}</span>
+        <div className="flex flex-col justify-end pb-1 mt-4">
+          <span className="text-[12px] tracking-[0.25em] font-black text-cyan uppercase block mb-0.5 opacity-80">{line.text}</span>
         </div>
       )}
 
       {line.type === 'scene' && (
-        <div className="flex flex-col justify-end pb-8 pt-6">
-          <span className="text-[13px] tracking-[0.45em] font-black text-cyan/70 uppercase block border-b border-cyan/20 pb-2.5 w-fit">{line.text}</span>
+        <div className="flex flex-col justify-end pb-4 pt-4 mt-6">
+          <span className="text-[11px] tracking-[0.5em] font-black text-cyan/60 uppercase block border-b border-cyan/10 pb-2 w-fit">{line.text}</span>
         </div>
       )}
 
       {line.type === 'direction' && (
         <div 
-          className={"pl-5 border-l-2 transition-all duration-500 overflow-hidden " + (cues.find((c) => c.directionId === line.dirId) ? 'border-cyan/50' : 'border-amber/40')}
+          className={"pl-6 border-l-2 transition-all duration-500 overflow-hidden mb-2 " + (cues.find((c) => c.directionId === line.dirId) ? 'border-cyan/50' : 'border-amber/40')}
         >
-          <p className="text-xl leading-[2]">
+          <p className="text-xl leading-[1.5]">
             <DirectionSpan
               text={line.text}
               dirId={line.dirId}
@@ -323,7 +324,13 @@ function ScriptRowBase({ index, style, scriptLines, cues, mode, activeCueIds, on
     </div>
   );
 
-  return <div style={style} className="px-[5%] md:px-[8%] lg:px-[10%]">{content}</div>;
+  return (
+    <div style={style} className="px-[8%] md:px-[12%] lg:px-[16%] flex justify-center">
+      <div className="w-full max-w-[800px] bg-white/[0.02] border-x border-white/[0.03] min-h-full px-10">
+        {content}
+      </div>
+    </div>
+  );
 }
 const ScriptRow = memo(ScriptRowBase);
 
@@ -337,8 +344,7 @@ export default function ScriptPanel({
   cues,
   activeCueIds,
   onDirectionClick,
-  onActivateCue,
-  onDeactivateCue,
+  onSyncActiveZone,
   baseFontSize = 34,
   onFontSizeChange,
   scriptLines = [],
@@ -382,14 +388,14 @@ export default function ScriptPanel({
     const contentWidth = containerWidth - horizontalPadding;
     const charPerLine = Math.floor(contentWidth / (safeBaseFontSize * 0.5)); // Optimized char width factor
     
-    if (line.type === 'spacer') return 64;
-    if (line.type === 'character') return 80;
-    if (line.type === 'scene') return 100;
+    if (line.type === 'spacer') return 24;
+    if (line.type === 'character') return 48;
+    if (line.type === 'scene') return 70;
     
     if (line.type === 'direction') {
       const textLen = line.text?.length || 0;
       const linesCount = Math.ceil(textLen / (charPerLine * 1.3)); 
-      return Math.max(80, linesCount * (safeBaseFontSize * 1.6) + 48);
+      return Math.max(48, linesCount * (safeBaseFontSize * 1.3) + 24);
     }
     
     // Mixed / Dialogue lines
@@ -398,8 +404,8 @@ export default function ScriptPanel({
       : line.text || '';
     
     const linesCount = Math.ceil(textStr.length / charPerLine);
-    const lineHeight = safeBaseFontSize * 1.8; // increased leading buffer
-    return Math.max(100, linesCount * lineHeight + 96); // Added more padding to prevent overlap
+    const lineHeight = safeBaseFontSize * 1.4; 
+    return Math.max(60, linesCount * lineHeight + 40); 
   }, [scriptLines, safeBaseFontSize, dimensions.width]);
 
   const rowProps = useMemo(() => ({
@@ -421,8 +427,19 @@ export default function ScriptPanel({
   // ── Scroll to Target ──
   useEffect(() => {
     if (scrollToTarget && scrollToTarget.id && listRef.current) {
-      const targetIndex = scriptLines.findIndex(l => l.dirId === scrollToTarget.id || l.lineId === scrollToTarget.id);
+      const targetIndex = scriptLines.findIndex(l => {
+        // Match specialized properties for different line types
+        if (l.dirId === scrollToTarget.id || l.lineId === scrollToTarget.id) return true;
+        
+        // Search inside mixed dialogue segments for inline directions
+        if (l.type === 'mixed' && l.segments) {
+          return l.segments.some(seg => seg.dirId === scrollToTarget.id);
+        }
+        return false;
+      });
+
       if (targetIndex !== -1) {
+        // v2.2.7 uses scrollToRow via listRef
         listRef.current.scrollToRow({ index: targetIndex, align: 'center' });
         
         // Finalize navigation state
@@ -434,29 +451,32 @@ export default function ScriptPanel({
   }, [scrollToTarget, scriptLines, onScrollComplete]);
 
   // ── Tooltip/Zone activation for virtualization ──
-  // Instead of IntersectionObserver, we determine active items based on their offset in the container
   const handleItemsRendered = useCallback(({ startIndex, stopIndex }) => {
     if (mode !== 'live') return;
 
-    // We can't easily get the OFFSET of an item from react-window without DOM access or helper
-    // However, we can approximate that the middle 20% of 'visibleIndex' range is the active zone
+    // Approximate active zone in the middle (20% to 40% of viewport)
     const visibleCount = stopIndex - startIndex;
     const activeStart = startIndex + Math.floor(visibleCount * 0.2);
     const activeEnd = startIndex + Math.floor(visibleCount * 0.4);
 
-    // Filter cues that fall in this range
-    scriptLines.forEach((line, idx) => {
-      const id = line.dirId || line.lineId;
-      if (!id) return;
-
-      const isVisible = idx >= activeStart && idx <= activeEnd;
-      if (isVisible) {
-        onActivateCue(id);
-      } else {
-        onDeactivateCue(id);
-      }
-    });
-  }, [mode, scriptLines, onActivateCue, onDeactivateCue]);
+    const activeIds = [];
+    for (let i = startIndex; i <= stopIndex; i++) {
+        const line = scriptLines[i];
+        if (!line) continue;
+        
+        const isVisible = i >= activeStart && i <= activeEnd;
+        if (isVisible) {
+            // Collect all cue IDs associated with this line/direction
+            cues.forEach(cue => {
+                if (cue.directionId === line.dirId || cue.directionId === line.lineId) {
+                    activeIds.push(cue.id);
+                }
+            });
+        }
+    }
+    
+    onSyncActiveZone(activeIds);
+  }, [mode, scriptLines, cues, onSyncActiveZone]);
 
   const handleFileUpload = useCallback(async (e) => {
     const file = e.target.files[0];
@@ -520,42 +540,42 @@ export default function ScriptPanel({
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-10 py-3 border-b border-border/60 bg-surface/30 backdrop-blur-md shrink-0">
-        <div className="flex items-center gap-5">
+      <div className="flex items-center justify-between px-10 py-2 border-b border-white/5 bg-surface-1/50 backdrop-blur-xl shrink-0 z-50">
+        <div className="flex items-center gap-6">
           <div className="flex flex-col">
-            <span className="text-[10px] font-black tracking-widest text-text-muted uppercase mb-0.5">DOSYA</span>
-            <span className="text-xs text-cyan font-mono">{fileName || 'senaryo-yüklenmedi.pdf'}</span>
+            <span className="text-[9px] font-black tracking-widest text-text-muted uppercase mb-0.5 opacity-60">DOSYA</span>
+            <span className="text-[11px] text-cyan font-mono tracking-tight">{fileName || 'senaryo-yüklenmedi.pdf'}</span>
           </div>
-          <div className="h-8 w-[1px] bg-border/40 mx-2" />
+          <div className="h-8 w-[1px] bg-white/5 mx-1" />
           {mode === 'setup' && (
-            <div className="bg-cyan/10 border border-cyan/30 px-4 py-1.5 rounded-full flex items-center gap-2 shadow-[0_0_15px_rgba(20,184,166,0.1)]">
+            <div className="bg-cyan/5 border border-cyan/20 px-4 py-1.5 rounded-full flex items-center gap-2 shadow-[0_0_20px_rgba(20,184,166,0.05)]">
               <div className="w-1.5 h-1.5 rounded-full bg-cyan animate-pulse" />
-              <span className="text-[10px] tracking-[0.15em] text-cyan font-black uppercase">
-                KURULUM — <span className="opacity-70 font-medium">Parantezlere tıklayarak tetikleyici bağla</span>
+              <span className="text-[9px] tracking-[0.1em] text-cyan font-black uppercase">
+                KURULUM — <span className="opacity-60 font-medium lowercase italic">parantezlere tıklayın</span>
               </span>
             </div>
           )}
         </div>
-        <div className="flex items-center gap-8">
+        
+        <div className="flex items-center gap-10">
           {/* Zoom Controls */}
-          <div className="flex items-center gap-3">
-            <span className="text-[9px] font-black tracking-widest text-text-muted uppercase">GÖRÜNÜM</span>
-            <div className="flex items-center bg-surface-3/50 backdrop-blur-sm rounded-xl p-1 border border-border/50 shadow-inner">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center bg-black/30 backdrop-blur-md rounded-xl p-1 border border-white/5 shadow-2xl">
               <button 
                 type="button"
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-cyan hover:bg-cyan/10 active:scale-90 transition-all outline-none border border-transparent hover:border-cyan/20"
-                onClick={() => onFontSizeChange && onFontSizeChange(Math.max(16, safeBaseFontSize - 4))}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-cyan hover:bg-white/5 active:scale-90 transition-all outline-none"
+                onClick={() => onFontSizeChange && onFontSizeChange(Math.max(12, safeBaseFontSize - 4))}
                 title="Küçült"
               >
-                <span className="text-xs font-black">A-</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 12H4" /></svg>
               </button>
               
-              <div className="px-3 min-w-[4rem] text-center border-x border-border/30">
+              <div className="px-4 min-w-[5rem] text-center border-x border-white/5">
                 <button 
                   type="button"
-                  className="text-[10px] font-black text-cyan hover:text-cyan-light transition-colors outline-none"
+                  className="text-[11px] font-black text-cyan hover:brightness-125 transition-all outline-none"
                   onClick={() => onFontSizeChange && onFontSizeChange(34)}
-                  title="Sıfırla (%100)"
+                  title="Varsayılan"
                 >
                   %{Math.round((safeBaseFontSize / 34) * 100)}
                 </button>
@@ -563,20 +583,19 @@ export default function ScriptPanel({
 
               <button 
                 type="button"
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-cyan hover:bg-cyan/10 active:scale-90 transition-all outline-none border border-transparent hover:border-cyan/20"
-                onClick={() => onFontSizeChange && onFontSizeChange(Math.min(72, safeBaseFontSize + 4))}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-cyan hover:bg-white/5 active:scale-90 transition-all outline-none"
+                onClick={() => onFontSizeChange && onFontSizeChange(Math.min(80, safeBaseFontSize + 4))}
                 title="Büyüt"
               >
-                <span className="text-sm font-black">A+</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
               </button>
             </div>
           </div>
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="group flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-cyan hover:text-cyan-light transition-all cursor-pointer bg-cyan/5 hover:bg-cyan/10 px-5 py-2.5 rounded-xl border border-cyan/20 hover:border-cyan/40 uppercase shadow-lg shadow-cyan/5"
+            className="group flex items-center gap-2 text-[10px] font-black tracking-widest text-[#eab308] hover:text-amber transition-all cursor-pointer bg-amber/5 hover:bg-amber/10 px-5 py-2.5 rounded-xl border border-amber/10 hover:border-amber/30 uppercase"
           >
-            <span className="opacity-70 group-hover:scale-110 transition-transform">🔄</span>
             DEĞİŞTİR
           </button>
         </div>
@@ -600,13 +619,13 @@ export default function ScriptPanel({
 
         {dimensions.height > 0 && dimensions.width > 0 && (
           <List
-            ref={listRef}
+            listRef={listRef}
             height={dimensions.height}
             width={dimensions.width}
-            rowCount={scriptLines.length + 1} // +1 for the bottom spacer
+            rowCount={scriptLines.length + 1}
             rowHeight={getItemSize}
-            rowComponent={ScriptRow}
             rowProps={rowProps}
+            rowComponent={ScriptRow}
             onRowsRendered={handleItemsRendered}
             className="script-scroll pt-16 pb-32"
           />

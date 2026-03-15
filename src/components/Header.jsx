@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 
-export default function Header({ mode, onModeChange, onExport, onImport, onReset, projectName, onProjectNameChange }) {
+export default function Header({ mode, onModeChange, onExport, onImport, onReset, projectName, onProjectNameChange, onImportError }) {
   const importInputRef = useRef(null);
 
   const handleImportClick = (e) => {
@@ -12,7 +12,9 @@ export default function Header({ mode, onModeChange, onExport, onImport, onReset
         const data = JSON.parse(event.target.result);
         onImport(data);
       } catch (err) {
-        alert('Geçersiz proje dosyası!');
+        if (typeof onImportError === 'function') {
+          onImportError('Geçersiz proje dosyası.', 'error');
+        }
       }
     };
     reader.readAsText(file);

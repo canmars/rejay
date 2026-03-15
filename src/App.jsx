@@ -36,6 +36,9 @@ export default function App() {
   // ── Toast Notifications state ──
   const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' | 'info' }
 
+  // ── Modal state ──
+  const [modal, setModal] = useState(null); // { title, message, onConfirm, confirmText, type: 'danger' | 'info' }
+
   // ── Scroll to Target Line functionality ──
   const [scrollToTarget, setScrollToTarget] = useState(null); // { id, timestamp } to trigger navigation
 
@@ -107,7 +110,7 @@ export default function App() {
           localStorage.removeItem('rejay-font-size');
           localStorage.removeItem('rejay-project-name');
           
-          showToast('Verileriniz yeni sisteme taşındı. 📦✅', 'info');
+          showToast('Veriler başarıyla taşındı.', 'info');
         }
       } catch (err) {
         console.error('Migration/Load error:', err);
@@ -193,7 +196,7 @@ export default function App() {
 
   const handleExport = async () => {
     try {
-      showToast('Yedek dosyas hazırlanıyor... ⏳', 'info');
+      showToast('Yedek dosyası hazırlanıyor...', 'info');
       
       const audioData = await getAllAudio();
       const serializedAudio = {};
@@ -223,16 +226,16 @@ export default function App() {
       link.download = downloadName;
       link.click();
       URL.revokeObjectURL(url);
-      showToast('Proje yedeği indirildi! 💾✨', 'success');
+      showToast('Proje yedeği kaydedildi.', 'success');
     } catch (err) {
       console.error('Export error:', err);
-      showToast('Yedekleme sırasında hata oluştu!', 'error');
+      showToast('Yedekleme sırasında bir hata oluştu.', 'error');
     }
   };
 
   const handleImport = async (data) => {
     try {
-      showToast('Proje geri yükleniyor... ⏳', 'info');
+      showToast('Proje geri yükleniyor...', 'info');
 
       if (data.projectName) setProjectName(data.projectName);
       if (data.fileName) setFileName(data.fileName);
@@ -254,36 +257,41 @@ export default function App() {
       }
 
       setMode('setup');
-      showToast('Proje başarıyla yüklendi! 🎭✅', 'success');
+      showToast('Proje yüklendi.', 'success');
       
       // Optional: Reaload to ensure audio URLs are re-hydrated if needed
       // window.location.reload(); 
     } catch (err) {
       console.error('Import error:', err);
-      showToast('Yükleme sırasında hata oluştu!', 'error');
+      showToast('Yükleme sırasında bir hata oluştu.', 'error');
     }
   };
 
   const handleResetProject = async () => {
-    if (window.confirm('TÜM PROJE SIFIRLANACAK! Emin misiniz?\n(Tüm tetikleyiciler, senaryo ve ekli ses dosyaları silinecek)')) {
-      try {
-        // Clear all persistent storage
-        localStorage.clear();
-        await clearAllAudio();
-        await clearProjectData();
-        
-        // Reset local state
-        setCues([]);
-        setScriptLines([]);
-        setFileName('');
-        setProjectName('adsiz-proje');
-        setMode('setup');
-        showToast('Her şey sıfırlandı. Yeni bir sayfadasınız.', 'info');
-      } catch (err) {
-        console.error('Reset error:', err);
-        showToast('Sıfırlama sırasında bir hata oluştu.', 'error');
+    setModal({
+      title: 'PROJEYİ SIFIRLA',
+      message: 'Bu işlem tüm tetikleyicileri, senaryoyu ve ekli ses dosyalarını kalıcı olarak silecektir. Devam etmek istediğinize emin misiniz?',
+      confirmText: 'Sıfırla',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          localStorage.clear();
+          await clearAllAudio();
+          await clearProjectData();
+          setCues([]);
+          setScriptLines([]);
+          setFileName('');
+          setProjectName('adsiz-proje');
+          setMode('setup');
+          showToast('Proje sıfırlandı.', 'info');
+        } catch (err) {
+          console.error('Reset error:', err);
+          showToast('İşlem sırasında bir hata oluştu.', 'error');
+        } finally {
+          setModal(null);
+        }
       }
-    }
+    });
   };
 
   // Called when a direction (parenthetical or line) is clicked in setup mode
@@ -316,25 +324,15 @@ export default function App() {
   const existingCue = editingDirection?.existingCue || null;
 
   // Global cue handlers for TriggerPanel & ScriptPanel
-  const handleActivateCue = (idOrDirId) => {
+  const handleSyncActiveZone = (ids) => {
     if (mode === 'live') {
-      const matchedCues = cues.filter(c => c.directionId === idOrDirId || c.id === idOrDirId);
-      if (matchedCues.length > 0) {
-        setActiveCueIds(prev => {
-          const newIds = matchedCues.map(c => c.id).filter(id => !prev.includes(id));
-          return [...prev, ...newIds];
-        });
-      }
-    }
-  };
-
-  const handleDeactivateCue = (idOrDirId) => {
-    if (mode === 'live') {
-      const matchedCues = cues.filter(c => c.directionId === idOrDirId || c.id === idOrDirId);
-      if (matchedCues.length > 0) {
-        const idsToRemove = matchedCues.map(c => c.id);
-        setActiveCueIds(prev => prev.filter(id => !idsToRemove.includes(id)));
-      }
+      setActiveCueIds(prev => {
+        // Deep equality check to prevent infinite loops
+        if (prev.length === ids.length && prev.every(id => ids.includes(id))) {
+          return prev;
+        }
+        return ids;
+      });
     }
   };
 
@@ -377,19 +375,51 @@ export default function App() {
         onReset={handleResetProject}
         projectName={projectName}
         onProjectNameChange={setProjectName}
+        onImportError={showToast}
       />
 
       {/* Toast Notification */}
       {toast && (
         <div className="fixed top-24 right-8 z-[100] animate-[slideInRight_0.3s_ease-out]">
           <div className={`px-6 py-3 rounded-xl border shadow-2xl backdrop-blur-md flex items-center gap-3
-            ${toast.type === 'error' ? 'bg-red/20 border-red text-red' : 
-              toast.type === 'info' ? 'bg-blue/20 border-blue text-blue' : 
-              'bg-cyan/20 border-cyan text-cyan'}`}>
-            <span className="text-xl">
-              {toast.type === 'error' ? '⚠️' : toast.type === 'info' ? 'ℹ️' : '✅'}
-            </span>
+            ${toast.type === 'error' ? 'bg-red/10 border-red/40 text-red' : 
+              toast.type === 'info' ? 'bg-blue/10 border-blue/40 text-blue' : 
+              'bg-cyan/10 border-cyan/40 text-cyan'}`}>
             <span className="text-sm font-black tracking-widest uppercase">{toast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Modern Modal Overlay */}
+      {modal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="w-full max-w-[400px] bg-surface-1 border border-border shadow-2xl rounded-2xl overflow-hidden animate-[scaleUp_0.3s_ease-out]">
+            <div className={`px-6 py-4 border-b border-border flex items-center gap-3 ${modal.type === 'danger' ? 'bg-red/5' : 'bg-cyan/5'}`}>
+              <div className={`w-2 h-2 rounded-full ${modal.type === 'danger' ? 'bg-red' : 'bg-cyan'}`} />
+              <h3 className={`text-[11px] font-black tracking-[0.2em] uppercase ${modal.type === 'danger' ? 'text-red' : 'text-cyan'}`}>
+                {modal.title}
+              </h3>
+            </div>
+            <div className="px-6 py-6">
+              <p className="text-sm text-text-secondary leading-relaxed tracking-wide">
+                {modal.message}
+              </p>
+            </div>
+            <div className="px-6 py-4 bg-surface-2 flex gap-2">
+              <button
+                onClick={() => setModal(null)}
+                className="flex-1 py-2.5 rounded-lg text-text-muted text-[11px] font-bold tracking-widest uppercase hover:bg-surface-3 transition-colors cursor-pointer"
+              >
+                İptal
+              </button>
+              <button
+                onClick={modal.onConfirm}
+                className={`flex-1 py-2.5 rounded-lg text-bg text-[11px] font-bold tracking-widest uppercase transition-all shadow-lg cursor-pointer
+                  ${modal.type === 'danger' ? 'bg-red hover:bg-red/90 shadow-red/20' : 'bg-cyan hover:bg-cyan/90 shadow-cyan/20'}`}
+              >
+                {modal.confirmText || 'Tamam'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -403,8 +433,7 @@ export default function App() {
             cues={cues}
             activeCueIds={activeCueIds}
             onDirectionClick={handleDirectionClick}
-            onActivateCue={handleActivateCue}
-            onDeactivateCue={handleDeactivateCue}
+            onSyncActiveZone={handleSyncActiveZone}
             baseFontSize={scriptFontSize}
             onFontSizeChange={setScriptFontSize}
             scriptLines={scriptLines}
