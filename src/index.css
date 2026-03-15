@@ -50,10 +50,17 @@
     font-family: inherit; /* Remove jetbrains mono, stick with outfit for mono-like tags */
   }
 
-  .script-scroll::-webkit-scrollbar { width: 4px; }
-  .script-scroll::-webkit-scrollbar-track { background: transparent; }
-  .script-scroll::-webkit-scrollbar-thumb { background: var(--color-border-light); border-radius: 2px; }
-  .script-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+  .script-scroll::-webkit-scrollbar { width: 8px; }
+  .script-scroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); border-radius: 10px; }
+  .script-scroll::-webkit-scrollbar-thumb { 
+    background: linear-gradient(to bottom, var(--color-surface-3), var(--color-cyan));
+    border-radius: 10px;
+    border: 2px solid var(--color-bg);
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+  }
+  .script-scroll::-webkit-scrollbar-thumb:hover { 
+    background: linear-gradient(to bottom, var(--color-cyan), var(--color-cyan));
+  }
 }
 
 @keyframes pulse-dot {

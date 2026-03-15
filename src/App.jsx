@@ -3,28 +3,26 @@ import Header from './components/Header';
 import ScriptPanel from './components/ScriptPanel';
 import TriggerPanel from './components/TriggerPanel';
 import CueEditor from './components/CueEditor';
-import { getAudioFile, getAllAudio, saveBulkAudio, clearAllAudio } from './utils/db';
+import { 
+  getAudioFile, 
+  getAllAudio, 
+  saveBulkAudio, 
+  clearAllAudio, 
+  saveProjectData, 
+  getProjectData, 
+  clearProjectData 
+} from './utils/db';
 
 export default function App() {
   // ── Global state ──
   const [mode, setMode] = useState('setup'); // 'setup' | 'live'
   const [systemStatus, setSystemStatus] = useState('READY');
-  const [cues, setCues] = useState(() => {
-    const saved = localStorage.getItem('rejay-cues');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // ── Script / PDF State ──
-  const [scriptLines, setScriptLines] = useState(() => {
-    const saved = localStorage.getItem('rejay-script-lines');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [fileName, setFileName] = useState(() => localStorage.getItem('rejay-filename') || '');
-  const [scriptFontSize, setScriptFontSize] = useState(() => {
-    const saved = localStorage.getItem('rejay-font-size');
-    return saved ? Number(saved) : 34;
-  });
-  const [projectName, setProjectName] = useState(() => localStorage.getItem('rejay-project-name') || 'adsiz-proje');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [cues, setCues] = useState([]);
+  const [scriptLines, setScriptLines] = useState([]);
+  const [fileName, setFileName] = useState('');
+  const [scriptFontSize, setScriptFontSize] = useState(34);
+  const [projectName, setProjectName] = useState('adsiz-proje');
 
   const slugify = (text) => {
     return text.toString().toLowerCase()
@@ -55,28 +53,92 @@ export default function App() {
   const [editingDirection, setEditingDirection] = useState(null); // { dirId, text }
   const [activeCueIds, setActiveCueIds] = useState([]); // IDs of cues currently in the active zone
 
-  // ── LocalStorage Auto-Save ──
+  // ── IndexedDB Initialization & Migration ──
   useEffect(() => {
-    localStorage.setItem('rejay-cues', JSON.stringify(cues));
-  }, [cues]);
+    const initData = async () => {
+      // 1. Try to load from IndexedDB
+      try {
+        const savedCues = await getProjectData('cues');
+        const savedLines = await getProjectData('script-lines');
+        const savedFile = await getProjectData('filename');
+        const savedFontSize = await getProjectData('font-size');
+        const savedProject = await getProjectData('project-name');
 
+        if (savedCues || savedLines || savedFile || savedFontSize || savedProject) {
+          if (savedCues) setCues(savedCues);
+          if (savedLines) setScriptLines(savedLines);
+          if (savedFile) setFileName(savedFile);
+          if (savedFontSize) setScriptFontSize(Number(savedFontSize));
+          if (savedProject) setProjectName(savedProject);
+          setIsInitialized(true);
+          console.log('App: Data loaded from IndexedDB');
+          return;
+        }
+
+        // 2. Fallback to Migration from LocalStorage
+        const localCues = localStorage.getItem('rejay-cues');
+        const localLines = localStorage.getItem('rejay-script-lines');
+        const localFile = localStorage.getItem('rejay-filename');
+        const localFontSize = localStorage.getItem('rejay-font-size');
+        const localProject = localStorage.getItem('rejay-project-name');
+
+        if (localCues || localLines || localFile || localFontSize || localProject) {
+          console.log('App: Migrating data from LocalStorage to IndexedDB...');
+          const parsedCues = localCues ? JSON.parse(localCues) : [];
+          const parsedLines = localLines ? JSON.parse(localLines) : [];
+          
+          setCues(parsedCues);
+          setScriptLines(parsedLines);
+          setFileName(localFile || '');
+          setScriptFontSize(localFontSize ? Number(localFontSize) : 34);
+          setProjectName(localProject || 'adsiz-proje');
+
+          // Save to IDB immediately
+          await saveProjectData('cues', parsedCues);
+          await saveProjectData('script-lines', parsedLines);
+          await saveProjectData('filename', localFile || '');
+          await saveProjectData('font-size', localFontSize || '34');
+          await saveProjectData('project-name', localProject || 'adsiz-proje');
+
+          // Clear localStorage after migration
+          localStorage.removeItem('rejay-cues');
+          localStorage.removeItem('rejay-script-lines');
+          localStorage.removeItem('rejay-filename');
+          localStorage.removeItem('rejay-font-size');
+          localStorage.removeItem('rejay-project-name');
+          
+          showToast('Verileriniz yeni sisteme taşındı. 📦✅', 'info');
+        }
+      } catch (err) {
+        console.error('Migration/Load error:', err);
+      } finally {
+        setIsInitialized(true);
+      }
+    };
+
+    initData();
+  }, []);
+
+  // ── IndexedDB Auto-Save ──
   useEffect(() => {
-    localStorage.setItem('rejay-script-lines', JSON.stringify(scriptLines));
-  }, [scriptLines]);
+    if (!isInitialized) return;
 
-  useEffect(() => {
-    localStorage.setItem('rejay-filename', fileName);
-  }, [fileName]);
+    const saveData = async () => {
+      try {
+        await saveProjectData('cues', cues);
+        await saveProjectData('script-lines', scriptLines);
+        await saveProjectData('filename', fileName);
+        await saveProjectData('font-size', scriptFontSize.toString());
+        await saveProjectData('project-name', projectName);
+      } catch (err) {
+        console.error('Auto-save error:', err);
+      }
+    };
 
-  useEffect(() => {
-    localStorage.setItem('rejay-font-size', scriptFontSize.toString());
-  }, [scriptFontSize]);
+    saveData();
+  }, [cues, scriptLines, fileName, scriptFontSize, projectName, isInitialized]);
 
-  useEffect(() => {
-    localStorage.setItem('rejay-project-name', projectName);
-  }, [projectName]);
-
-  // ── Audio Hydration (Blobs die on refresh) ──
+  // ── Audio Hydration (Blobs die on refresh/import) ──
   useEffect(() => {
     const hydrateAudio = async () => {
       const updatedCues = [...cues];
@@ -105,7 +167,7 @@ export default function App() {
     if (cues.some(c => c.type === 'sound' && c.soundId && !c.soundUrl)) {
       hydrateAudio();
     }
-  }, []);
+  }, [cues]);
 
   // ── BeforeUnload Protection ──
   useEffect(() => {
@@ -204,17 +266,23 @@ export default function App() {
 
   const handleResetProject = async () => {
     if (window.confirm('TÜM PROJE SIFIRLANACAK! Emin misiniz?\n(Tüm tetikleyiciler, senaryo ve ekli ses dosyaları silinecek)')) {
-      // Clear persistence
-      localStorage.clear();
-      await clearAllAudio();
-      
-      // Reset state
-      setCues([]);
-      setScriptLines([]);
-      setFileName('');
-      setProjectName('adsiz-proje');
-      setMode('setup');
-      showToast('Her şey sıfırlandı. Yeni bir sayfadasınız.', 'info');
+      try {
+        // Clear all persistent storage
+        localStorage.clear();
+        await clearAllAudio();
+        await clearProjectData();
+        
+        // Reset local state
+        setCues([]);
+        setScriptLines([]);
+        setFileName('');
+        setProjectName('adsiz-proje');
+        setMode('setup');
+        showToast('Her şey sıfırlandı. Yeni bir sayfadasınız.', 'info');
+      } catch (err) {
+        console.error('Reset error:', err);
+        showToast('Sıfırlama sırasında bir hata oluştu.', 'error');
+      }
     }
   };
 

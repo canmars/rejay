@@ -2,16 +2,24 @@ import { openDB } from 'idb';
 
 const DB_NAME = 'rejay-audio-db';
 const STORE_NAME = 'audio-files';
+const METADATA_STORE = 'project-metadata';
 
 export async function initDB() {
-  return openDB(DB_NAME, 1, {
+  return openDB(DB_NAME, 2, {
     upgrade(db) {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
       }
+      if (!db.objectStoreNames.contains(METADATA_STORE)) {
+        db.createObjectStore(METADATA_STORE);
+      }
     },
   });
 }
+
+// ── Audio Helpers ──
+// ... existing audio helpers below ...
+
 
 export async function saveAudioFile(id, blob) {
   const db = await initDB();
@@ -53,3 +61,21 @@ export async function saveBulkAudio(audios) {
   }
   return tx.done;
 }
+
+// ── Project Metadata Helpers ──
+
+export async function saveProjectData(key, data) {
+  const db = await initDB();
+  return db.put(METADATA_STORE, data, key);
+}
+
+export async function getProjectData(key) {
+  const db = await initDB();
+  return db.get(METADATA_STORE, key);
+}
+
+export async function clearProjectData() {
+  const db = await initDB();
+  return db.clear(METADATA_STORE);
+}
+

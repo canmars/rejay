@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
+import { List } from 'react-window';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -12,7 +13,19 @@ const TR_LOWER_CHARS = /[a-zçğıöşü]/;
 const HAS_LETTER = /[A-ZÇĞİÖŞÜ]{2,}/;
 
 function isAllCaps(str) {
+  // Support Turkish characters and numbers, ensure it has letters
   return TR_UPPER.test(str) && !TR_LOWER_CHARS.test(str) && HAS_LETTER.test(str);
+}
+
+function isSceneHeader(str) {
+  const trimmed = str.trim().toUpperCase();
+  // Match "SAHNE 1", "BÖLÜM 2", "1. SAHNE", etc.
+  return (
+    trimmed.startsWith('SAHNE') || 
+    trimmed.startsWith('BÖLÜM') || 
+    /^\d+\.\s*SAHNE/.test(trimmed) ||
+    /^\d+\.\s*BÖLÜM/.test(trimmed)
+  );
 }
 
 async function extractTextWithLines(pdf) {
@@ -84,14 +97,23 @@ function parseScript(lines) {
       if (parsed.length > 0 && parsed[parsed.length - 1].type !== 'spacer') parsed.push({ type: 'spacer' });
       continue;
     }
+    
+    // Scene Headers
+    if (isSceneHeader(trimmed)) {
+      parsed.push({ type: 'scene', text: trimmed.toUpperCase() });
+      continue;
+    }
+
     if (/^\(.*\)$/.test(trimmed)) {
       parsed.push({ type: 'direction', text: trimmed, dirId: `dir-${directionCounter++}` });
       continue;
     }
+
     if (trimmed.length <= 50 && isAllCaps(trimmed)) {
       parsed.push({ type: 'character', text: trimmed.replace(/[:\-–—]+$/, '').trim() });
       continue;
     }
+
     const charMatch = trimmed.match(
       /^([A-ZÇĞİÖŞÜ][A-ZÇĞİÖŞÜ\s]{1,30}?)(?:\s*[:;\-–—]\s*|\s{2,}|\s(?=[A-ZÇĞİÖŞÜa-zçğıöşü(]))([\s\S]+)$/
     );
@@ -153,12 +175,12 @@ function DirectionSpan({ text, dirId, mode, cues, activeCueIds, onDirectionClick
         id={`dir-${dirId}`}
         data-cue-id={hasCue ? dirId : undefined}
         style={{ fontSize: `${directionFontSize}px` }}
-        className={`italic transition-all duration-300 font-sans tracking-wide
-          ${isSetup ? 'text-[#eab308] cursor-pointer hover:text-amber hover:bg-amber/10 rounded px-1.5 -mx-1.5 hover:underline decoration-amber/30 underline-offset-4' : 'text-text-muted'}
-          ${hasCue && isSetup ? 'underline decoration-dotted decoration-text-muted/40 underline-offset-4' : ''}
-          ${isActive ? 'bg-cyan/15 px-2 -mx-2 rounded-lg border-l-4 border-cyan text-cyan scale-[1.02] inline-block shadow-[0_0_20px_rgba(20,184,166,0.2)]' : ''}
-          ${hasCue && isLive && allFired && !isActive ? 'opacity-40 line-through decoration-text-muted/50 text-[#eab308]' : ''}
-          ${hasCue && isLive && !allFired && !isActive ? 'text-[#eab308]' : ''}`}
+        className={"italic transition-all duration-300 font-sans tracking-wide " +
+          (isSetup ? 'text-[#eab308] cursor-pointer hover:text-amber hover:bg-amber/10 rounded px-1.5 -mx-1.5 hover:underline decoration-amber/30 underline-offset-4 ' : 'text-text-muted ') +
+          (hasCue && isSetup ? 'underline decoration-dotted decoration-text-muted/40 underline-offset-4 ' : '') +
+          (isActive ? 'bg-cyan/15 px-2 -mx-2 rounded-lg border-l-4 border-cyan text-cyan scale-[1.02] inline-block shadow-[0_0_20px_rgba(20,184,166,0.2)] ' : '') +
+          (hasCue && isLive && allFired && !isActive ? 'opacity-40 line-through decoration-text-muted/50 text-[#eab308] ' : '') +
+          (hasCue && isLive && !allFired && !isActive ? 'text-[#eab308]' : '')}
         onClick={isSetup ? () => onDirectionClick(dirId, text) : undefined}
         title={isSetup ? "Yeni tetikleyici ekle" : undefined}
       >
@@ -172,7 +194,7 @@ function DirectionSpan({ text, dirId, mode, cues, activeCueIds, onDirectionClick
 }
 
 // ── Dialogue line (clickable in setup mode to add cue to arbitrary line) ──
-function DialogueLine({ line, mode, cues, activeCueIds, onDirectionClick, baseFontSize, navId }) {
+function DialogueLineBase({ line, mode, cues, activeCueIds, onDirectionClick, baseFontSize, navId }) {
   const isSetup = mode === 'setup';
   const isLive = mode === 'live';
   const lineCues = cues.filter((c) => c.directionId === line.lineId);
@@ -182,16 +204,16 @@ function DialogueLine({ line, mode, cues, activeCueIds, onDirectionClick, baseFo
 
   return (
     <div 
-      className={`relative group mb-5 p-3 -mx-3 rounded-xl transition-all duration-500
-        ${isSetup ? 'hover:bg-surface-2/60 hover:shadow-xl hover:shadow-black/20' : ''}
-        ${isActive ? 'bg-gradient-to-r from-cyan/10 to-transparent border-l-4 border-cyan shadow-[inset_4px_0_20px_rgba(20,184,166,0.1)]' : 'border-l-4 border-transparent'}
-        ${hasCue && isLive && allFired && !isActive ? 'opacity-40' : ''}`}
+      className={"relative group mb-8 p-4 -mx-4 rounded-2xl transition-all duration-500 " +
+        (isSetup ? 'hover:bg-surface-2/40 border border-transparent hover:border-border/30 ' : '') +
+        (isActive ? 'bg-gradient-to-r from-cyan/10 to-transparent border-l-4 border-cyan shadow-[inset_4px_0_20px_rgba(20,184,166,0.1)] ' : 'border-l-4 border-transparent ') +
+        (hasCue && isLive && allFired && !isActive ? 'opacity-40' : '')}
       id={`dir-${line.lineId}`}
       data-nav-id={navId}
       data-cue-id={hasCue ? line.lineId : undefined}
     >
-      <div className="flex items-center flex-wrap">
-        <p style={{ fontSize: `${baseFontSize}px` }} className="font-serif leading-[1.8] text-text grow antialiased tracking-wide">
+      <div className="flex items-start gap-4">
+        <p style={{ fontSize: `${baseFontSize}px` }} className="font-serif leading-[1.7] text-text grow antialiased tracking-wide">
           {line.type === 'mixed' ? (
             line.segments.map((seg, si) =>
               seg.type === 'direction-inline' ? (
@@ -213,25 +235,98 @@ function DialogueLine({ line, mode, cues, activeCueIds, onDirectionClick, baseFo
             line.text
           )}
         </p>
-        <div className="ml-2 flex gap-1 shrink-0">
-          {hasCue && lineCues.map(cue => (
-            <CueBadge key={cue.id} cue={cue} mode={mode} onEditClick={(cueToEdit) => onDirectionClick(line.lineId, line.text?.substring(0, 50) + (line.text?.length > 50 ? '...' : ''), cueToEdit)} />
-          ))}
+        
+        {/* Actions Area */}
+        <div className="flex flex-col items-end gap-2 shrink-0 pt-2">
+          {isSetup && (
+            <button
+              onClick={() => onDirectionClick(line.lineId, line.text?.substring(0, 50) + (line.text?.length > 50 ? '...' : ''))}
+              className="px-3 py-1.5 bg-surface-3/80 border border-border/50 rounded-lg text-[9px] font-black tracking-widest text-cyan uppercase cursor-pointer hover:bg-cyan/10 hover:border-cyan/40 transition-all shadow-lg whitespace-nowrap"
+            >
+              {hasCue ? '[+ YENİ EKLE]' : '[+ TETİKLEYİCİ EKLE]'}
+            </button>
+          )}
+          <div className="flex gap-1 flex-wrap justify-end">
+            {hasCue && lineCues.map(cue => (
+              <CueBadge key={cue.id} cue={cue} mode={mode} onEditClick={(cueToEdit) => onDirectionClick(line.lineId, line.text?.substring(0, 50) + (line.text?.length > 50 ? '...' : ''), cueToEdit)} />
+            ))}
+          </div>
         </div>
       </div>
-
-      {/* Setup Mode: Add New Cue Button */}
-      {isSetup && (
-        <button
-          onClick={() => onDirectionClick(line.lineId, line.text?.substring(0, 50) + (line.text?.length > 50 ? '...' : ''))}
-          className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 px-3 py-1.5 bg-surface-3 border border-border rounded text-[10px] font-black tracking-widest text-cyan cursor-pointer hover:bg-cyan/10 hover:border-cyan/30 transition-all shadow-lg"
-        >
-          {hasCue ? '[+ YENİ EKLE]' : '[+ TETİKLEYİCİ EKLE]'}
-        </button>
-      )}
     </div>
   );
 }
+const DialogueLine = memo(DialogueLineBase);
+
+
+// ── ScriptRow component for virtualization v2 ──
+function ScriptRowBase({ index, style, scriptLines, cues, mode, activeCueIds, onDirectionClick, safeBaseFontSize }) {
+  if (index === scriptLines.length) {
+    return (
+      <div style={style} className="flex flex-col items-center justify-start pt-20 px-[5%]">
+        <div className="w-12 h-1 bg-surface-3 rounded-full mb-4" />
+        <span className="text-[11px] font-black tracking-[0.6em] text-text-muted uppercase">SENARYO SONU</span>
+      </div>
+    );
+  }
+
+  const line = scriptLines[index];
+  if (!line) return null;
+
+  const content = (
+    <div className="mx-auto w-full max-w-[1000px]">
+      {line.type === 'spacer' && <div className="h-10" />}
+      
+      {line.type === 'character' && (
+        <div className="flex flex-col justify-end pb-5">
+          <span className="text-[14px] tracking-[0.35em] font-black text-cyan uppercase block mb-1.5">{line.text}</span>
+        </div>
+      )}
+
+      {line.type === 'scene' && (
+        <div className="flex flex-col justify-end pb-8 pt-6">
+          <span className="text-[13px] tracking-[0.45em] font-black text-cyan/70 uppercase block border-b border-cyan/20 pb-2.5 w-fit">{line.text}</span>
+        </div>
+      )}
+
+      {line.type === 'direction' && (
+        <div 
+          className={"pl-5 border-l-2 transition-all duration-500 overflow-hidden " + (cues.find((c) => c.directionId === line.dirId) ? 'border-cyan/50' : 'border-amber/40')}
+        >
+          <p className="text-xl leading-[2]">
+            <DirectionSpan
+              text={line.text}
+              dirId={line.dirId}
+              mode={mode}
+              cues={cues}
+              activeCueIds={activeCueIds}
+              onDirectionClick={onDirectionClick}
+              baseFontSize={safeBaseFontSize}
+            />
+          </p>
+        </div>
+      )}
+
+      {(line.type === 'mixed' || line.type === 'dialogue') && (
+        <div className="overflow-hidden">
+          <DialogueLine
+            line={line}
+            navId={line.lineId}
+            mode={mode}
+            cues={cues}
+            activeCueIds={activeCueIds}
+            onDirectionClick={onDirectionClick}
+            baseFontSize={safeBaseFontSize}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  return <div style={style} className="px-[5%] md:px-[8%] lg:px-[10%]">{content}</div>;
+}
+const ScriptRow = memo(ScriptRowBase);
+
 
 // ─────────────────────────────────────────
 // Component
@@ -256,59 +351,112 @@ export default function ScriptPanel({
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
-  const scrollRef = useRef(null);
+  const listRef = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   const safeBaseFontSize = baseFontSize || 34;
 
+  const containerRef = useCallback((node) => {
+    if (node !== null) {
+      const observer = new ResizeObserver((entries) => {
+        if (entries[0]) {
+          const { width, height } = entries[0].contentRect;
+          setDimensions({ width, height });
+        }
+      });
+      observer.observe(node);
+      // Clean up is harder here without a state to store the observer, 
+      // but ResizeObserver is usually fine if the node is unmounted.
+      // Alternatively, we use a ref to store the observer.
+    }
+  }, []);
+
+  // ── Estimated heights based on type and content size ──
+  const getItemSize = useCallback((index) => {
+    const line = scriptLines[index];
+    if (!line) return 0;
+    
+    // Width estimation for line wrapping
+    const containerWidth = dimensions.width || 1200;
+    const horizontalPadding = containerWidth * 0.2; // 10% each side
+    const contentWidth = containerWidth - horizontalPadding;
+    const charPerLine = Math.floor(contentWidth / (safeBaseFontSize * 0.5)); // Optimized char width factor
+    
+    if (line.type === 'spacer') return 64;
+    if (line.type === 'character') return 80;
+    if (line.type === 'scene') return 100;
+    
+    if (line.type === 'direction') {
+      const textLen = line.text?.length || 0;
+      const linesCount = Math.ceil(textLen / (charPerLine * 1.3)); 
+      return Math.max(80, linesCount * (safeBaseFontSize * 1.6) + 48);
+    }
+    
+    // Mixed / Dialogue lines
+    const textStr = line.type === 'mixed' 
+      ? line.segments.map(s => s.text).join('') 
+      : line.text || '';
+    
+    const linesCount = Math.ceil(textStr.length / charPerLine);
+    const lineHeight = safeBaseFontSize * 1.8; // increased leading buffer
+    return Math.max(100, linesCount * lineHeight + 96); // Added more padding to prevent overlap
+  }, [scriptLines, safeBaseFontSize, dimensions.width]);
+
+  const rowProps = useMemo(() => ({
+    scriptLines,
+    cues,
+    mode,
+    activeCueIds,
+    onDirectionClick,
+    safeBaseFontSize
+  }), [scriptLines, cues, mode, activeCueIds, onDirectionClick, safeBaseFontSize]);
+
+  //Recalculate heights when font size or lines change
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.resetAfterIndex?.(0);
+    }
+  }, [safeBaseFontSize, scriptLines]);
+
   // ── Scroll to Target ──
   useEffect(() => {
-    if (scrollToTarget && scrollToTarget.id) {
-      const element = scrollRef.current?.querySelector(`[data-nav-id="${scrollToTarget.id}"]`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-        // Brief highlight effect
-        element.classList.add('nav-highlight');
-        setTimeout(() => {
-          element.classList.remove('nav-highlight');
-          onScrollComplete?.();
-        }, 2000);
+    if (scrollToTarget && scrollToTarget.id && listRef.current) {
+      const targetIndex = scriptLines.findIndex(l => l.dirId === scrollToTarget.id || l.lineId === scrollToTarget.id);
+      if (targetIndex !== -1) {
+        listRef.current.scrollToRow({ index: targetIndex, align: 'center' });
+        
+        // Finalize navigation state
+        setTimeout(() => onScrollComplete?.(), 1000);
       } else {
         onScrollComplete?.();
       }
     }
-  }, [scrollToTarget, onScrollComplete]);
+  }, [scrollToTarget, scriptLines, onScrollComplete]);
 
-  // IntersectionObserver to activate cues in LIVE mode when they enter the "Active Zone"
-  useEffect(() => {
-    if (mode !== 'live' || !scrollRef.current) return;
+  // ── Tooltip/Zone activation for virtualization ──
+  // Instead of IntersectionObserver, we determine active items based on their offset in the container
+  const handleItemsRendered = useCallback(({ startIndex, stopIndex }) => {
+    if (mode !== 'live') return;
 
-    // Active zone is between 20% and 40% from the top of the viewport
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        const dirId = entry.target.getAttribute('data-cue-id');
-        if (dirId) {
-          const cue = cues.find(c => c.directionId === dirId);
-          if (cue) {
-            if (entry.isIntersecting) {
-              onActivateCue(dirId);
-            } else {
-              onDeactivateCue(dirId);
-            }
-          }
-        }
-      });
-    }, {
-      root: scrollRef.current,
-      rootMargin: "-20% 0px -60% 0px", // Active zone representing the upper-middle chunk
-      threshold: 0
+    // We can't easily get the OFFSET of an item from react-window without DOM access or helper
+    // However, we can approximate that the middle 20% of 'visibleIndex' range is the active zone
+    const visibleCount = stopIndex - startIndex;
+    const activeStart = startIndex + Math.floor(visibleCount * 0.2);
+    const activeEnd = startIndex + Math.floor(visibleCount * 0.4);
+
+    // Filter cues that fall in this range
+    scriptLines.forEach((line, idx) => {
+      const id = line.dirId || line.lineId;
+      if (!id) return;
+
+      const isVisible = idx >= activeStart && idx <= activeEnd;
+      if (isVisible) {
+        onActivateCue(id);
+      } else {
+        onDeactivateCue(id);
+      }
     });
-
-    const elements = scrollRef.current.querySelectorAll('[data-cue-id]');
-    elements.forEach(el => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, [mode, cues, onActivateCue, onDeactivateCue, scriptLines]);
+  }, [mode, scriptLines, onActivateCue, onDeactivateCue]);
 
   const handleFileUpload = useCallback(async (e) => {
     const file = e.target.files[0];
@@ -319,7 +467,9 @@ export default function ScriptPanel({
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const lines = await extractTextWithLines(pdf);
+      console.log('Extracted lines count:', lines.length);
       const parsed = parseScript(lines);
+      console.log('Parsed script lines:', parsed.length);
       setScriptLines(parsed);
       if (onAutoProjectName) {
         onAutoProjectName(file.name.replace('.pdf', ''));
@@ -370,52 +520,63 @@ export default function ScriptPanel({
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-12 py-2 border-b border-border shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-text-muted font-mono">{fileName}</span>
+      <div className="flex items-center justify-between px-10 py-3 border-b border-border/60 bg-surface/30 backdrop-blur-md shrink-0">
+        <div className="flex items-center gap-5">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black tracking-widest text-text-muted uppercase mb-0.5">DOSYA</span>
+            <span className="text-xs text-cyan font-mono">{fileName || 'senaryo-yüklenmedi.pdf'}</span>
+          </div>
+          <div className="h-8 w-[1px] bg-border/40 mx-2" />
           {mode === 'setup' && (
-            <span className="text-[9px] tracking-[0.2em] text-cyan bg-cyan/10 border border-cyan/20 px-2 py-0.5 rounded-full font-bold">
-              KURULUM — Parantezlere tıklayarak tetikleyici bağla
-            </span>
+            <div className="bg-cyan/10 border border-cyan/30 px-4 py-1.5 rounded-full flex items-center gap-2 shadow-[0_0_15px_rgba(20,184,166,0.1)]">
+              <div className="w-1.5 h-1.5 rounded-full bg-cyan animate-pulse" />
+              <span className="text-[10px] tracking-[0.15em] text-cyan font-black uppercase">
+                KURULUM — <span className="opacity-70 font-medium">Parantezlere tıklayarak tetikleyici bağla</span>
+              </span>
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-8">
           {/* Zoom Controls */}
-          <div className="flex items-center bg-surface-2/50 rounded-lg p-0.5 border border-border/50">
-            <button 
-              type="button"
-              className="w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-cyan hover:bg-cyan/10 active:scale-90 transition-all outline-none"
-              onClick={() => onFontSizeChange && onFontSizeChange(Math.max(16, safeBaseFontSize - 4))}
-              title="Küçült"
-            >
-              <span className="text-sm font-bold">A-</span>
-            </button>
-            
-            <div className="px-2 min-w-[3.5rem] text-center">
+          <div className="flex items-center gap-3">
+            <span className="text-[9px] font-black tracking-widest text-text-muted uppercase">GÖRÜNÜM</span>
+            <div className="flex items-center bg-surface-3/50 backdrop-blur-sm rounded-xl p-1 border border-border/50 shadow-inner">
               <button 
                 type="button"
-                className="text-[10px] font-black text-cyan/70 hover:text-cyan transition-colors outline-none"
-                onClick={() => onFontSizeChange && onFontSizeChange(34)}
-                title="Sıfırla (%100)"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-cyan hover:bg-cyan/10 active:scale-90 transition-all outline-none border border-transparent hover:border-cyan/20"
+                onClick={() => onFontSizeChange && onFontSizeChange(Math.max(16, safeBaseFontSize - 4))}
+                title="Küçült"
               >
-                %{Math.round((safeBaseFontSize / 34) * 100)}
+                <span className="text-xs font-black">A-</span>
+              </button>
+              
+              <div className="px-3 min-w-[4rem] text-center border-x border-border/30">
+                <button 
+                  type="button"
+                  className="text-[10px] font-black text-cyan hover:text-cyan-light transition-colors outline-none"
+                  onClick={() => onFontSizeChange && onFontSizeChange(34)}
+                  title="Sıfırla (%100)"
+                >
+                  %{Math.round((safeBaseFontSize / 34) * 100)}
+                </button>
+              </div>
+
+              <button 
+                type="button"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-cyan hover:bg-cyan/10 active:scale-90 transition-all outline-none border border-transparent hover:border-cyan/20"
+                onClick={() => onFontSizeChange && onFontSizeChange(Math.min(72, safeBaseFontSize + 4))}
+                title="Büyüt"
+              >
+                <span className="text-sm font-black">A+</span>
               </button>
             </div>
-
-            <button 
-              type="button"
-              className="w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-cyan hover:bg-cyan/10 active:scale-90 transition-all outline-none"
-              onClick={() => onFontSizeChange && onFontSizeChange(Math.min(72, safeBaseFontSize + 4))}
-              title="Büyüt"
-            >
-              <span className="text-base font-bold">A+</span>
-            </button>
           </div>
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="text-[11px] font-black tracking-[0.2em] text-text-muted hover:text-cyan transition-all cursor-pointer bg-surface-2/50 px-3 py-1.5 rounded-lg border border-border/50 uppercase"
+            className="group flex items-center gap-2 text-[10px] font-black tracking-[0.2em] text-cyan hover:text-cyan-light transition-all cursor-pointer bg-cyan/5 hover:bg-cyan/10 px-5 py-2.5 rounded-xl border border-cyan/20 hover:border-cyan/40 uppercase shadow-lg shadow-cyan/5"
           >
+            <span className="opacity-70 group-hover:scale-110 transition-transform">🔄</span>
             DEĞİŞTİR
           </button>
         </div>
@@ -423,78 +584,33 @@ export default function ScriptPanel({
       </div>
 
       {/* Script body */}
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto script-scroll px-16 py-10 relative"
-      >
-        {/* User zoom controls were moved to toolbar above */}
-
+      <div ref={containerRef} className="flex-1 script-scroll overflow-hidden relative">
         {/* Active Zone overlay in LIVE mode */}
         {mode === 'live' && (
-          <>
-            <div className="fixed top-[20%] left-0 w-[70%] h-1 bg-cyan/80 border-t-2 border-dashed border-cyan shadow-[0_0_20px_rgba(0,212,170,0.8)] pointer-events-none z-40 flex items-center">
+          <div className="absolute inset-0 pointer-events-none z-40">
+            <div className="absolute top-[20%] left-0 w-full h-1 bg-cyan/80 border-t-2 border-dashed border-cyan shadow-[0_0_20px_rgba(0,212,170,0.8)] flex items-center">
               <span className="text-xs text-bg bg-cyan font-black tracking-widest px-4 py-0.5 ml-4 rounded-b-md shadow-lg">⬇ AKTİF ALANA GİRİŞ</span>
             </div>
-            <div className="fixed top-[40%] left-0 w-[70%] h-[3px] bg-cyan/60 border-t-2 border-dashed border-cyan/80 shadow-[0_0_15px_rgba(0,212,170,0.5)] pointer-events-none z-40 flex items-center">
+            <div className="absolute top-[40%] left-0 w-full h-[3px] bg-cyan/60 border-t-2 border-dashed border-cyan/80 shadow-[0_0_15px_rgba(0,212,170,0.5)] flex items-center">
               <span className="text-xs text-text bg-bg border border-cyan/50 font-black tracking-widest px-4 py-0.5 ml-4 rounded-t-md opacity-80">⬆ AKTİF ALAN BİTİŞİ</span>
             </div>
-            {/* Pronounced soft gradient background for the active zone */}
-            <div className="fixed top-[20%] left-0 w-[70%] h-[20%] bg-gradient-to-b from-cyan/10 via-cyan/5 to-transparent pointer-events-none z-30 ring-inset ring-2 ring-cyan/20 blur-[1px]" />
-          </>
+            <div className="absolute top-[20%] left-0 w-full h-[20%] bg-gradient-to-b from-cyan/10 via-cyan/5 to-transparent z-30 ring-inset ring-2 ring-cyan/20 blur-[1px]" />
+          </div>
         )}
-        
-        {scriptLines.map((line, index) => {
-          if (line.type === 'spacer') return <div key={index} className="h-8" />;
 
-          if (line.type === 'character') {
-            return (
-              <div key={index} className="mt-12 mb-3 first:mt-0">
-                <span className="text-sm tracking-[0.25em] font-bold text-cyan uppercase block">{line.text}</span>
-              </div>
-            );
-          }
-
-            if (line.type === 'direction') {
-              const hasCue = cues.find((c) => c.directionId === line.dirId);
-              return (
-                <div 
-                  key={index} 
-                  data-nav-id={line.dirId}
-                  className={`my-5 pl-5 border-l-2 transition-all duration-500 ${hasCue ? 'border-cyan/50' : 'border-amber/40'}`}
-                >
-                  <p className="text-xl leading-[2]">
-                    <DirectionSpan
-                      text={line.text}
-                      dirId={line.dirId}
-                      mode={mode}
-                      cues={cues}
-                      activeCueIds={activeCueIds}
-                      onDirectionClick={onDirectionClick}
-                      baseFontSize={safeBaseFontSize}
-                    />
-                  </p>
-                </div>
-              );
-            }
-
-            if (line.type === 'mixed' || line.type === 'dialogue') {
-              return (
-                <DialogueLine
-                  key={index}
-                  line={line}
-                  navId={line.lineId}
-                  mode={mode}
-                  cues={cues}
-                  activeCueIds={activeCueIds}
-                  onDirectionClick={onDirectionClick}
-                  baseFontSize={safeBaseFontSize}
-                />
-              );
-            }
-
-            return null;
-          })}
-        <div className="h-[60vh]" />
+        {dimensions.height > 0 && dimensions.width > 0 && (
+          <List
+            ref={listRef}
+            height={dimensions.height}
+            width={dimensions.width}
+            rowCount={scriptLines.length + 1} // +1 for the bottom spacer
+            rowHeight={getItemSize}
+            rowComponent={ScriptRow}
+            rowProps={rowProps}
+            onRowsRendered={handleItemsRendered}
+            className="script-scroll pt-16 pb-32"
+          />
+        )}
       </div>
     </div>
   );
