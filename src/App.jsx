@@ -3,7 +3,7 @@ import Header from './components/Header';
 import ScriptPanel from './components/ScriptPanel';
 import TriggerPanel from './components/TriggerPanel';
 import CueEditor from './components/CueEditor';
-import { getAudioFile } from './utils/db';
+import { getAudioFile, getAllAudio, saveBulkAudio, clearAllAudio } from './utils/db';
 
 export default function App() {
   // ── Global state ──
@@ -120,45 +120,95 @@ export default function App() {
   }, [cues]);
 
   // ── Project Export / Import ──
-  const handleExport = () => {
-    const projectData = {
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      projectName,
-      fileName,
-      scriptFontSize,
-      scriptLines,
-      cues: cues.map(c => ({ ...c, soundUrl: '' }))
-    };
-
-    const dateStr = new Date().toISOString().split('T')[0].split('-').reverse().join('-');
-    const downloadName = `${projectName}_${dateStr}.rejay`;
-
-    const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = downloadName;
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('Proje dosyası indirildi. ✨', 'info');
+  const blobToBase64 = (blob) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   };
 
-  const handleImport = (data) => {
-    if (data.projectName) setProjectName(data.projectName);
-    if (data.fileName) setFileName(data.fileName);
-    if (data.scriptFontSize) setScriptFontSize(data.scriptFontSize);
-    if (data.scriptLines) setScriptLines(data.scriptLines);
-    if (data.cues) setCues(data.cues);
-    setMode('setup');
-    showToast('Proje başarıyla yüklendi! 🎭');
+  const handleExport = async () => {
+    try {
+      showToast('Yedek dosyas hazırlanıyor... ⏳', 'info');
+      
+      const audioData = await getAllAudio();
+      const serializedAudio = {};
+      
+      for (const [id, blob] of Object.entries(audioData)) {
+        serializedAudio[id] = await blobToBase64(blob);
+      }
+
+      const projectData = {
+        version: '2.0',
+        timestamp: new Date().toISOString(),
+        projectName,
+        fileName,
+        scriptFontSize,
+        scriptLines,
+        cues: cues.map(c => ({ ...c, soundUrl: '' })),
+        audioData: serializedAudio
+      };
+
+      const dateStr = new Date().toISOString().split('T')[0].split('-').reverse().join('-');
+      const downloadName = `${projectName}_${dateStr}.rejay`;
+
+      const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = downloadName;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast('Proje yedeği indirildi! 💾✨', 'success');
+    } catch (err) {
+      console.error('Export error:', err);
+      showToast('Yedekleme sırasında hata oluştu!', 'error');
+    }
+  };
+
+  const handleImport = async (data) => {
+    try {
+      showToast('Proje geri yükleniyor... ⏳', 'info');
+
+      if (data.projectName) setProjectName(data.projectName);
+      if (data.fileName) setFileName(data.fileName);
+      if (data.scriptFontSize) setScriptFontSize(data.scriptFontSize);
+      if (data.scriptLines) setScriptLines(data.scriptLines);
+      
+      // Restore Cues
+      if (data.cues) setCues(data.cues);
+
+      // Restore Audio
+      if (data.audioData) {
+        const audioToSave = {};
+        for (const [id, base64] of Object.entries(data.audioData)) {
+          const res = await fetch(base64);
+          const blob = await res.blob();
+          audioToSave[id] = blob;
+        }
+        await saveBulkAudio(audioToSave);
+      }
+
+      setMode('setup');
+      showToast('Proje başarıyla yüklendi! 🎭✅', 'success');
+      
+      // Optional: Reaload to ensure audio URLs are re-hydrated if needed
+      // window.location.reload(); 
+    } catch (err) {
+      console.error('Import error:', err);
+      showToast('Yükleme sırasında hata oluştu!', 'error');
+    }
   };
 
   const handleResetProject = async () => {
     if (window.confirm('TÜM PROJE SIFIRLANACAK! Emin misiniz?\n(Tüm tetikleyiciler, senaryo ve ekli ses dosyaları silinecek)')) {
       // Clear persistence
       localStorage.clear();
-      // Clearing IndexedDB is more complex, but we can at least clear the cues and script
+      await clearAllAudio();
+      
+      // Reset state
       setCues([]);
       setScriptLines([]);
       setFileName('');

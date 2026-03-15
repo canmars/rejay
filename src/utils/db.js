@@ -32,3 +32,24 @@ export async function clearAllAudio() {
   const db = await initDB();
   return db.clear(STORE_NAME);
 }
+
+export async function getAllAudio() {
+  const db = await initDB();
+  const tx = db.transaction(STORE_NAME, 'readonly');
+  const store = tx.objectStore(STORE_NAME);
+  const keys = await store.getAllKeys();
+  const audios = {};
+  for (const key of keys) {
+    audios[key] = await store.get(key);
+  }
+  return audios;
+}
+
+export async function saveBulkAudio(audios) {
+  const db = await initDB();
+  const tx = db.transaction(STORE_NAME, 'readwrite');
+  for (const [id, blob] of Object.entries(audios)) {
+    await tx.objectStore(STORE_NAME).put(blob, id);
+  }
+  return tx.done;
+}
