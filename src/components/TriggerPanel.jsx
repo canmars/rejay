@@ -171,12 +171,15 @@ export default function TriggerPanel({ mode, scriptLines, cues, activeCueIds, on
     if (line.dirId) lineToIndex[line.dirId] = idx;
   });
 
-  const activeCues = (mode === 'setup' ? cues : cues.filter(c => activeCueIds.includes(c.id)))
+  const activeCues = (mode === 'setup' 
+    ? cues 
+    : cues.filter(c => activeCueIds.includes(c.id) || playingAudios[c.id]))
     .map(c => ({
       ...c,
       displayCode: c.code || (c.type === 'light' ? 'IŞIK' : c.type === 'sound' ? 'SES' : 'AKSİYON'),
       displayDesc: c.description || (c.type === 'light' ? c.lightMessage : c.type === 'sound' ? c.soundFile : c.actionNote),
-      scriptIndex: lineToIndex[c.directionId] ?? 999999
+      scriptIndex: lineToIndex[c.directionId] ?? 999999,
+      isOutOfZonePlaying: !activeCueIds.includes(c.id) && !!playingAudios[c.id]
     }))
     .sort((a, b) => a.scriptIndex - b.scriptIndex);
 
@@ -301,10 +304,20 @@ export default function TriggerPanel({ mode, scriptLines, cues, activeCueIds, on
                     /* Large Card Format for Live Mode */
                     <div 
                       key={cue.id} 
-                      className={`p-6 rounded-2xl border-2 flex flex-col items-center text-center animate-pulse-dot shadow-[0_0_30px_rgba(0,0,0,0.15)]
-                        ${cue.type === 'light' ? 'border-red bg-red/10' : cue.type === 'sound' ? 'border-blue bg-blue/10' : 'border-cyan bg-cyan/10'}`} 
-                      style={{ animationDuration: '2.5s' }}
+                      className={`p-6 rounded-2xl border-2 flex flex-col items-center text-center shadow-[0_0_30px_rgba(0,0,0,0.15)] transition-all duration-500
+                        ${playingAudios[cue.id] 
+                          ? 'border-blue bg-blue/10 ring-2 ring-blue/50 shadow-[0_0_40px_rgba(59,130,246,0.3)] animate-pulse' 
+                          : `animate-pulse-dot ${cue.type === 'light' ? 'border-red bg-red/10' : cue.type === 'sound' ? 'border-blue bg-blue/10' : 'border-cyan bg-cyan/10'}`}`} 
+                      style={{ animationDuration: playingAudios[cue.id] ? '1.5s' : '2.5s' }}
                     >
+                      {/* "NOW PLAYING" badge for out-of-zone playing cues */}
+                      {cue.isOutOfZonePlaying && (
+                        <div className="w-full flex items-center justify-center gap-2 mb-3 py-1.5 rounded-lg bg-blue/15 border border-blue/30">
+                          <div className="w-2 h-2 rounded-full bg-blue animate-ping" />
+                          <span className="text-[10px] font-black tracking-[0.2em] text-blue uppercase">🔊 ÇALINIYOR</span>
+                        </div>
+                      )}
+
                       <span className={`text-[11px] tracking-[0.2em] font-black mb-3 px-3 py-1 rounded-full border
                         ${cue.type === 'light' ? 'text-red bg-red/10 border-red/30' : cue.type === 'sound' ? 'text-blue bg-blue/10 border-blue/30' : 'text-cyan bg-cyan/10 border-cyan/30'}`}>
                         {cue.type === 'light' ? 'IŞIK UYARISI' : cue.type === 'sound' ? 'SES UYARISI' : 'AKSİYON UYARISI'}
