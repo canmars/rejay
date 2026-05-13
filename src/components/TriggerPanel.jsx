@@ -179,9 +179,15 @@ export default function TriggerPanel({ mode, scriptLines, cues, activeCueIds, on
       displayCode: c.code || (c.type === 'light' ? 'IŞIK' : c.type === 'sound' ? 'SES' : 'AKSİYON'),
       displayDesc: c.description || (c.type === 'light' ? c.lightMessage : c.type === 'sound' ? c.soundFile : c.actionNote),
       scriptIndex: lineToIndex[c.directionId] ?? 999999,
+      isPlaying: !!playingAudios[c.id],
       isOutOfZonePlaying: !activeCueIds.includes(c.id) && !!playingAudios[c.id]
     }))
-    .sort((a, b) => a.scriptIndex - b.scriptIndex);
+    .sort((a, b) => {
+      // Playing cues always pinned to top
+      if (a.isPlaying && !b.isPlaying) return -1;
+      if (!a.isPlaying && b.isPlaying) return 1;
+      return a.scriptIndex - b.scriptIndex;
+    });
 
   return (
     <div className="flex flex-col h-full bg-bg relative">
@@ -238,9 +244,19 @@ export default function TriggerPanel({ mode, scriptLines, cues, activeCueIds, on
               </div>
             )}
 
-            <div className={`flex-1 overflow-y-auto ${mode === 'setup' ? '' : 'px-6 py-6 space-y-6'}`}>
-              <div className={`flex flex-col ${mode === 'setup' ? '' : 'gap-6'}`}>
-                {activeCues.map(cue => (
+            <div className={`flex-1 overflow-y-auto ${mode === 'setup' ? '' : 'px-4 py-4'}`}>
+              <div className={`flex flex-col ${mode === 'setup' ? '' : 'gap-4'}`}>
+                {/* In live mode, separate playing cues from active zone cues */}
+                {mode === 'live' && activeCues.some(c => c.isPlaying) && (
+                  <>
+                    <div className="flex items-center gap-2 px-2 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-blue animate-ping" />
+                      <span className="text-[9px] font-black tracking-[0.2em] text-blue uppercase">ÇALAN SESLER</span>
+                      <div className="flex-1 h-px bg-blue/20" />
+                    </div>
+                  </>
+                )}
+                {activeCues.filter(c => mode !== 'live' || c.isPlaying).map(cue => (
                   mode === 'setup' ? (
                     /* High-Fidelity Table Row for Setup Mode */
                     <div 
@@ -341,6 +357,47 @@ export default function TriggerPanel({ mode, scriptLines, cues, activeCueIds, on
                     </div>
                   )
                 ))}
+
+                {/* Active Zone cues (non-playing) in live mode */}
+                {mode === 'live' && activeCues.some(c => !c.isPlaying) && (
+                  <>
+                    {activeCues.some(c => c.isPlaying) && (
+                      <div className="flex items-center gap-2 px-2 mt-4 mb-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-cyan animate-pulse" />
+                        <span className="text-[9px] font-black tracking-[0.2em] text-cyan uppercase">AKTİF ALAN</span>
+                        <div className="flex-1 h-px bg-cyan/20" />
+                      </div>
+                    )}
+                    {activeCues.filter(c => !c.isPlaying).map(cue => (
+                      <div 
+                        key={cue.id} 
+                        className={`p-6 rounded-2xl border-2 flex flex-col items-center text-center animate-pulse-dot shadow-[0_0_30px_rgba(0,0,0,0.15)]
+                          ${cue.type === 'light' ? 'border-red bg-red/10' : cue.type === 'sound' ? 'border-blue bg-blue/10' : 'border-cyan bg-cyan/10'}`} 
+                        style={{ animationDuration: '2.5s' }}
+                      >
+                        <span className={`text-[11px] tracking-[0.2em] font-black mb-3 px-3 py-1 rounded-full border
+                          ${cue.type === 'light' ? 'text-red bg-red/10 border-red/30' : cue.type === 'sound' ? 'text-blue bg-blue/10 border-blue/30' : 'text-cyan bg-cyan/10 border-cyan/30'}`}>
+                          {cue.type === 'light' ? 'IŞIK UYARISI' : cue.type === 'sound' ? 'SES UYARISI' : 'AKSİYON UYARISI'}
+                        </span>
+                        
+                        {cue.type === 'sound' ? (
+                          <>
+                            <h2 className="text-2xl font-black text-text mb-2">{cue.displayCode}</h2>
+                            <p className="text-base text-text-secondary mb-5">{cue.displayDesc}</p>
+                            <button
+                              onClick={() => toggleAudio(cue)}
+                              className="w-full py-4 rounded-xl text-lg font-black tracking-widest cursor-pointer shadow-lg active:scale-95 transition-all bg-blue hover:bg-blue/90 text-bg shadow-blue/20"
+                            >
+                              ▶ SESİ OYNAT
+                            </button>
+                          </>
+                        ) : (
+                          <p className="text-3xl font-black text-text leading-tight mb-2 antialiased">{cue.displayDesc}</p>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           </div>
